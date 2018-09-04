@@ -1,11 +1,40 @@
 # /usr/bin/python3
 import sys
 import socket
-import select
 import random
+import time
+import math
+import hashlib
 
-def format_line(line):
-    return line.rstrip().replace("\n", "")
+base9 = 1000000000
+
+
+# Recebe sequence_number, message e change de erro retorna o pacote (errado ou não)
+def build_pack(seq, message, perror):
+    # Get seconds and nanoseconds
+    nano, sec = math.modf(time.time())
+
+    bseq = seq.to_bytes(8, byteorder='big')
+    bsec = int(sec).to_bytes(8, byteorder='big')
+    bnano = int(nano*base9).to_bytes(4, byteorder='big')
+    blen = len(message).to_bytes(2, byteorder='big')
+    bmsg = message.encode('ascii')
+
+    # Calculando md5 (usando dados transformados em bytes, pode estar errado)
+    m = hashlib.md5()
+    m.update(bseq + bsec + bnano + blen + bmsg)
+    if is_error(perror):
+        print('Erro no checksum')
+        bchecksum = (random.getrandbits(128)).to_bytes(16, byteorder='big')
+    else:
+        bchecksum = bytes.fromhex(m.hexdigest())
+
+    # print(seq, int(sec), int(nano*base9), len(message), message, m.hexdigest())
+    # print(bseq, bsec, bnano, blen, bmsg, bchecksum)
+    # print(bseq + bsec + bnano + blen + bmsg + bchecksum)
+    
+    return bseq + bsec + bnano + blen + bmsg + bchecksum
+
 
 def is_error(perror):
     rand = random.uniform(0, 1)
@@ -14,32 +43,26 @@ def is_error(perror):
     return False
 
 
-# verifica se a mensagem é valida
 def is_ascii(s):
     return all(ord(c) < 128 for c in s)
 
 
 def main():
-    # pega argumentos do argv
     FILE = sys.argv[1]
     IP_PORT = sys.argv[2]
-    # Tamanho da janela dae transmissao
     WTX = sys.argv[3]
-    # Temporizador de retransmissão
     TOUT = int(sys.argv[4])
-    # Chance de enviar erro
     PERROR = float(sys.argv[5])
 
     ip_port = IP_PORT.split(":")
-    
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = (ip_port[0], ip_port[1])
 
-    
     seq_number = 0
-    inp = open(FILE, 'r') 
+    inp = open(FILE, 'r')
     for line in inp:
-        print(format_line(line))
+        pack = build_pack(seq_number, line.rstrip().replace("\n", ""), PERROR)
+        print(pack)
         seq_number += 1
 
     inp.close()
