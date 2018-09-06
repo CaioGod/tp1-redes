@@ -14,18 +14,28 @@ def build_pack(seq, message, perror):
     # Get seconds and nanoseconds
     nano, sec = math.modf(time.time())
 
-    bseq = seq.to_bytes(8, byteorder='big')
-    bsec = int(sec).to_bytes(8, byteorder='big')
+    bseq  = seq.to_bytes(8, byteorder='big')
+    bsec  = int(sec).to_bytes(8, byteorder='big')
     bnano = int(nano*base9).to_bytes(4, byteorder='big')
-    blen = len(message).to_bytes(2, byteorder='big')
-    bmsg = message.encode('ascii')
+    blen  = len(message).to_bytes(2, byteorder='big')
+    bmsg  = message.encode('ascii')
 
+    package = bseq + bsec + bnano + blen + bmsg
+    print(package)
     # Calculando md5 (usando dados transformados em bytes, pode estar errado)
     m = hashlib.md5()
-    m.update(bseq + bsec + bnano + blen + bmsg)
+    m.update(package)
+   
+    print(m.hexdigest())
+    #m.update()
+    print(m.hexdigest()) 
+    print('----------------')
+
     if is_error(perror):
+        # Basta somar 1 no campo de checksum
         print('Erro no checksum')
         bchecksum = (random.getrandbits(128)).to_bytes(16, byteorder='big')
+
     else:
         bchecksum = bytes.fromhex(m.hexdigest())
 
@@ -35,7 +45,7 @@ def build_pack(seq, message, perror):
     
     return bseq + bsec + bnano + blen + bmsg + bchecksum
 
-
+# Geracao de erro na mensagem
 def is_error(perror):
     rand = random.uniform(0, 1)
     if perror <= rand:
@@ -46,23 +56,26 @@ def is_error(perror):
 def is_ascii(s):
     return all(ord(c) < 128 for c in s)
 
-
 def main():
-    FILE = sys.argv[1]
-    IP_PORT = sys.argv[2]
-    WTX = sys.argv[3]
-    TOUT = int(sys.argv[4])
-    PERROR = float(sys.argv[5])
 
-    ip_port = IP_PORT.split(":")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    server_address = (ip_port[0], ip_port[1])
+    if (len(sys.argv) < 5):
+        print("ERROR: Argumentos invalidos.")
+        print("Tente: fileName IP:port Wtx Tout Perror")
+        sys.exit()
+    
+    FILE     = sys.argv[1]
+    IP, PORT = sys.argv[2].split(":")
+    WTX      = int(sys.argv[3])
+    TOUT     = int(sys.argv[4])
+    PERROR   = float(sys.argv[5])
+    
+    server_address = (IP, PORT)
 
     seq_number = 0
     inp = open(FILE, 'r')
     for line in inp:
         pack = build_pack(seq_number, line.rstrip().replace("\n", ""), PERROR)
-        print(pack)
+        #print(pack)
         seq_number += 1
 
     inp.close()
@@ -87,5 +100,5 @@ def main():
     #             else:
     #                 print('Mensagem invalida pois nao pertence a tabela ASCII')
 
-
-main()
+if __name__ == '__main__':
+    main()
