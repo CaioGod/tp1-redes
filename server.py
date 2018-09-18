@@ -47,6 +47,16 @@ def main():
 
     server_address = ('localhost', PORT)
 
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+    udp.bind(server_address)
+
+    while True:
+        data, address = udp.recvfrom(4096)
+
+        print(len)
+        print(data)
+
+
 if __name__ == '__main__':
     main()
 
