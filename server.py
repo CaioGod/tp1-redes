@@ -1,9 +1,54 @@
 # /usr/bin/python3
-import socket
-import sys
-import re
+import socket, sys, re, time, math, hashlib
+import random
 
+base9 = 1000000000
 
+# Recebe numero de sequencia e prob de erro e retorna o pacote ACK
+def build_ack(seq, perror):
+
+    nano, sec = math.modf(time.time())
+
+    bseq  = seq.to_bytes(8, byteoerder='big')
+    bsec  = int(sec).to_bytes(8, byteoerder='big')
+    bnano = int(nano*base9).to_bytes(4, byteoerder='big')
+    
+    ack = bseq + bsec + bnano
+
+    m = hashlib.md5()
+    m.update(ack)
+
+    if is_error(perror):
+        print('Erro no MD5')
+        md5 = (random.getrandbits(128)).to_bytes(16, byteorder='big')
+    else:
+        md5 = bytes.fromhex(m.hexdigest())
+
+    return bseq + bsec + bnano + md5
+
+# Geracao de erro na mensagem
+def is_error(perror):
+    rand = random.uniform(0, 1)
+    if perror <= rand:
+        return True
+    return False
+
+def main():
+
+    if (len(sys.argv) < 4):
+        print("ERROR: Argumentos invalidos.")
+        print("Tente: fileName port Wtx Perror")
+        sys.exit()
+
+    FILE   = sys.argv[1]
+    PORT   = int(sys.argv[2])
+    WTX    = int(sys.argv[3])
+    PERROR = float(sys.argv[4])
+
+    server_address = ('localhost', PORT)
+
+if __name__ == '__main__':
+    main()
 
 # REFERENCIA: TP3
 
