@@ -13,7 +13,7 @@ base9 = 1000000000
 readlock = Lock()
 total_sent = 0
 total_errors = 0
-acks = {}
+sliding_window = {}
 
 def build_pack(seq, message):
     # Get seconds and nanoseconds
@@ -61,14 +61,14 @@ def add_checksum(partial):
 
 
 def send_thread(udp, server_address, contentArray):
-    global readlock, acks, total_sent
+    global readlock, sliding_window, total_sent
     while True:
         readlock.acquire()
         if sw_begin == len(contentArray):
             readlock.release()
             break
         try:
-            for key, value in acks.items():
+            for key, value in sliding_window.items():
                 if value != -1:
                     package = build_pack(key, contentArray[key].rstrip().replace("\n", ""))
                     udp.sendto(package, server_address)
@@ -78,7 +78,7 @@ def send_thread(udp, server_address, contentArray):
 
 
 def ack_thread(udp, contentSize):
-    global readlock, acks, total_sent, sw_begin, sw_end 
+    global readlock, sliding_window, total_sent, sw_begin, sw_end 
     acked = []
 
     while True:
@@ -105,20 +105,20 @@ def ack_thread(udp, contentSize):
         if ack_index >= sw_begin and ack_index <= sw_end:
             heappush(acked, ack_index)
             
-            # Colocando -1 nos vetor de acks para não reenviar o mesmo pacote
+            # Colocando -1 nos vetor de sliding_window para não reenviar o mesmo pacote
             if sw_begin != nsmallest(1, acked)[0]:
-                acks[ack_index] = -1
+                sliding_window[ack_index] = -1
             
             # Atualiza o limite da janela
             while len(acked) > 0 and sw_begin == nsmallest(1, acked)[0]:
                 heappop(acked)
-                del acks[sw_begin]
+                del sliding_window[sw_begin]
                 sw_begin += 1
             
             # Colocando 0 nos novos pacotes a serem enviados
             while True:
-                if not sw_end in acks: 
-                    acks[sw_end] = 0
+                if not sw_end in sliding_window: 
+                    sliding_window[sw_end] = 0
                 if sw_end == contentSize - 1:
                     break
                 if sw_end >= sw_begin + WTX-1:
@@ -128,7 +128,7 @@ def ack_thread(udp, contentSize):
 
 
 def main():
-    global WTX, TOUT, PERROR, acks, sw_begin, sw_end
+    global WTX, TOUT, PERROR, sliding_window, sw_begin, sw_end
 
     # Leitura de argumentos
     start_time = time.time()
@@ -146,7 +146,7 @@ def main():
     sw_begin = 0
     sw_end = WTX-1
     for v in range(sw_end):
-        acks[v] = 0
+        sliding_window[v] = 0
 
     # Instancia socket UDP
     server_address = (IP, PORT)
