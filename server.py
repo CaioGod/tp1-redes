@@ -1,3 +1,4 @@
+
 # /usr/bin/python3
 import socket, sys, re, time, math, hashlib
 import random
@@ -18,22 +19,36 @@ def build_ack(seq, perror):
     m = hashlib.md5()
     m.update(ack)
 
-    if is_error(perror):
+    if is_error():
         print('Erro no MD5')
         md5 = (random.getrandbits(128)).to_bytes(16, byteorder='big')
     else:
         md5 = bytes.fromhex(m.hexdigest())
 
-    return bseq + bsec + bnano + md5
+    return add_checksum(bseq + bsec + bnano + md5)
+
+def add_checksum(partial):
+    
+    m = hashlib.md5()
+    m.update(partial)
+
+    if is_error():
+        bchecksum = (random.getrandbits(128)).to_bytes(16, byteorder='big')
+    else:
+        bchecksum = bytes.fromhex(m.hexdigest())
+
+    return partial + bchecksum
 
 # Geracao de erro na mensagem
-def is_error(perror):
+def is_error():
+    global PERROR
     rand = random.uniform(0, 1)
-    if perror <= rand:
+    if rand < PERROR:
         return True
     return False
 
 def main():
+    global WTX, PERROR
 
     if (len(sys.argv) < 4):
         print("ERROR: Argumentos invalidos.")
@@ -53,9 +68,12 @@ def main():
     while True:
         data, address = udp.recvfrom(4096)
 
-        print(len)
+        print('Destino: {}'.format(address))
         print(data)
-
+        print('-------------')
+        print(data[:8])
+        teste = 0
+        print(teste.from_bytes(data[:8], byteorder='big', signed=False))
 
 if __name__ == '__main__':
     main()
