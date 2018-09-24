@@ -112,13 +112,13 @@ def ack_thread(udp, contentSize):
             continue
     
         if not check_md5(ack_pkg):
-            print("MD5 dont match")
+            # print("MD5 dont match")
             continue
         ack_index = get_index(ack_pkg)
         
         readlock.acquire()
         if ack_index >= sw_begin and ack_index <= sw_end:
-            print('ACK #: {}'.format(ack_index))
+            # print('ACK #: {}'.format(ack_index))
             heappush(acked, ack_index)
 
             # Colocando -1 nos vetor de sliding_window para não reenviar o mesmo pacote
