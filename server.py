@@ -36,9 +36,9 @@ def build_ack(seq):
     else:
         md5 = bytes.fromhex(m.hexdigest())
 
-    return add_checksum(bseq + bsec + bnano + md5)
+    return add_md5(bseq + bsec + bnano + md5)
 
-def add_checksum(partial):
+def add_md5(partial):
 
     m = hashlib.md5()
     m.update(partial)
@@ -54,20 +54,20 @@ def add_checksum(partial):
 def is_error():
     
     global PERROR
-    
     rand = random.uniform(0, 1)
-
     return rand < PERROR
 
 def new_client(address):
+    
     global RWS
+    
     clients[address] = {}
     clients[address]['janela'] = {}
     clients[address]['lfa'] = RWS - 1
     clients[address]['nfe'] = 0
+    
     for v in range(RWS):
         clients[address]['janela'][v] = None
-
 
 # Thread do usuario
 def user_thread(udp, outputFile):
@@ -85,17 +85,16 @@ def user_thread(udp, outputFile):
 
         # Verificacao do md5
         if(check_md5(data)):
+
             lock.acquire()
-            seqnumber = 0
-            seqnumber = seqnumber.from_bytes(
+            seqnumber = int.from_bytes(
                 data[:8], byteorder='big', signed=False)
             
-            messageSize = 0
-            messageSize = messageSize.from_bytes(data[20:22], byteorder='big', signed=False)
+            messageSize = int.from_bytes(data[20:22], byteorder='big', signed=False)
             
             message = (data[22:(22 + messageSize)]).decode('ascii')
-            # print(message)
-            
+
+            # Pacote recebido eh o esperado
             if seqnumber == clients[addr]['nfe']:
                 clients[addr]['janela'][seqnumber] = message
                 ack = build_ack(seqnumber)
@@ -108,20 +107,27 @@ def user_thread(udp, outputFile):
                         file.write('\n')
                         del clients[addr]['janela'][seqnumber]
                         seqnumber += 1               
+                
+                # Atualizar janela
                 clients[addr]['nfe'] = seqnumber
                 clients[addr]['lfa'] = seqnumber + RWS - 1
                 for v in range(seqnumber, clients[addr]['lfa']):
                     if v not in clients[addr]['janela'] and v > seqnumber: 
                         clients[addr]['janela'][v] = None
+            
+            # Pacote recebido não é o esperado mas está dentro da janela.
             elif seqnumber > clients[addr]['nfe'] and seqnumber < clients[addr]['lfa']:
                 # Quadro esta dentro da janela esperada
                 clients[addr]['janela'][seqnumber] = message
                 ack = build_ack(seqnumber)
                 udp.sendto(ack, addr)
+            
+            # Pacote recebido está abaixo da janela esperada
             elif seqnumber < clients[addr]['nfe']:
                 # Caso receba abaixo da janela deve reenviar ack
                 ack = build_ack(seqnumber)
                 udp.sendto(ack, addr)
+
             lock.release()
 
 
@@ -133,8 +139,7 @@ def check_md5(data):
     bNanoSec     = data[16:20]
     bMessageSize = data[20:22]
 
-    messageSize = 0
-    messageSize = messageSize.from_bytes(
+    messageSize = int.from_bytes(
         data[20:22], byteorder='big', signed=False)
 
     bMessage = data[22:(22 + messageSize)]

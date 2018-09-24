@@ -15,7 +15,6 @@ total_sent = 0
 total_errors = 0
 sliding_window = {}
 
-
 def build_pack(seq, message):
 
     # Get seconds and nanoseconds
@@ -27,10 +26,9 @@ def build_pack(seq, message):
     blen = len(message).to_bytes(2, byteorder='big', signed=False)
     bmsg = message.encode('ascii')
 
-    return add_checksum(bseq + bsec + bnano + blen + bmsg)
+    return add_md5(bseq + bsec + bnano + blen + bmsg)
 
-
-def add_checksum(partial):
+def add_md5(partial):
 
     global total_errors
 
@@ -53,7 +51,6 @@ def is_error():
 
     return rand < PERROR
 
-
 def check_md5(data):
     bSeqNumber   = data[0:8]
     bSeconds     = data[8:16]
@@ -64,10 +61,8 @@ def check_md5(data):
     md5Calculado.update((bSeqNumber + bSeconds + bNanoSec))
     return md5recvd.hex() == md5Calculado.hexdigest()
 
-
 def get_index(data):
     return int.from_bytes(data[0:8], byteorder='big', signed=False)
-
 
 def send_thread(udp, server_address, contentList):
 
@@ -88,7 +83,6 @@ def send_thread(udp, server_address, contentList):
                 udp.sendto(package, server_address)
                 total_sent += 1
         readlock.release()
-
 
 def ack_thread(udp, contentSize):
 
@@ -141,7 +135,6 @@ def ack_thread(udp, contentSize):
                     break
                 sw_end += 1
         readlock.release()
-
 
 def main():
     global WTX, TOUT, PERROR, sliding_window, sw_begin, sw_end
