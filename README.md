@@ -22,3 +22,17 @@ O cliente possui as seguintes funções:
 
 O cliente possui as seguintes funções:
 def build_pack(seq, message):
+
+
+# Testing
+
+Para testar usando multiplos clientes basta aumentar ou o tempo TOUT ou o TERROR dos clientes ou do servidor:
+
+```
+python3 server.py zoutput 5000 8 0.2
+```
+
+```
+python3 client.py zinput localhost:5000 5 2 0.2
+python3 client.py zinput2 localhost:5000 4 1 0.8
+```
