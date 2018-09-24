@@ -72,7 +72,6 @@ def user_thread(udp, outputFile):
         # Tamanho maximo do pacote = 8 + 8 + 4 + 2 + 2^14 + 16
         data, address = udp.recvfrom(16422)
 
-        print('Origem: {}'.format(address))
         # Verificacao do md5
         if(check_md5(data)):
             

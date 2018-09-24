@@ -38,6 +38,7 @@ def add_checksum(partial):
     m.update(partial)
 
     if is_error():
+        # print("Checksum error")
         total_errors += 1
         bchecksum = (random.getrandbits(128)).to_bytes(16, byteorder='big')
     else:
@@ -53,35 +54,39 @@ def is_error():
     return rand < PERROR
 
 
-def check_ack(ack_package):
-    # TODO
-    # must check ack package
-    return True
+def check_md5(data):
+    bSeqNumber   = data[0:8]
+    bSeconds     = data[8:16]
+    bNanoSec     = data[16:20]
+    md5recvd     = data[20:36]
+
+    md5Calculado = hashlib.md5()
+    md5Calculado.update((bSeqNumber + bSeconds + bNanoSec))
+    return md5recvd.hex() == md5Calculado.hexdigest()
 
 
-def get_index(ack_package):
-
-    # TODO
-    # must return ack index (seq_number acked)
-    return 1
+def get_index(data):
+    return int.from_bytes(data[0:8], byteorder='big', signed=False)
 
 
 def send_thread(udp, server_address, contentList):
 
-    global readlock, acks, total_sent
+    global readlock, acks, total_sent, TOUT
 
-    readlock.acquire()
-    if sw_begin == len(contentList):
-        readlock.release()
+    while True:
+        readlock.acquire()
+        if sw_begin == len(contentList):
+            readlock.release()
+            break
 
-    try:
-        print('Tamanho ACKS: {}'.format(len(acks)))
         for key, value in acks.items():
-            if value != -1:
+            if value == -1: continue
+            if value == 0 or value < time.time():
+                acks[key] = time.time() + TOUT
+                # print("SEND %d" % key)
                 package = build_pack(key, contentList[key])
                 udp.sendto(package, server_address)
                 total_sent += 1
-    finally:
         readlock.release()
 
 
@@ -97,27 +102,23 @@ def ack_thread(udp, contentSize):
             readlock.release()
             break
         readlock.release()
-
+        time.sleep(0.005)
         try:
             ack_pkg, addr = udp.recvfrom(36)
             seqnumber = 0
             seqnumber = seqnumber.from_bytes(
                 ack_pkg[:8], byteorder='big', signed=False)
-            print('ACK #: {}'.format(seqnumber))
-
         except socket.timeout:
             continue
-
-        # TODO implementar check_package ou similar
-        #if not check_package(ack_pkg):
-        #   continue
-
-        # TODO implementar get_index ou similar
+    
+        if not check_md5(ack_pkg):
+            print("MD5 dont match")
+            continue
         ack_index = get_index(ack_pkg)
-
+        
         readlock.acquire()
-        # Verifica se o pacote está dentro da janela
         if ack_index >= sw_begin and ack_index <= sw_end:
+            print('ACK #: {}'.format(ack_index))
             heappush(acked, ack_index)
 
             # Colocando -1 nos vetor de acks para não reenviar o mesmo pacote
@@ -161,7 +162,7 @@ def main():
     # Instancia variaveis da Janela Deslizante
     sw_begin = 0
     sw_end = WTX-1
-    for v in range(sw_end):
+    for v in range(WTX):
         acks[v] = 0
 
     # Instancia socket UDP
