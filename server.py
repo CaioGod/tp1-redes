@@ -7,14 +7,14 @@ import time
 import math
 import hashlib
 import random
-from threading import Thread, Lock
+import threading
 
 base9 = 1000000000
 
+lock = threading.Lock()
+
 # Recebe numero de sequencia e prob de erro e retorna o pacote ACK
-
-
-def build_ack(seq, perror):
+def build_ack(seq):
 
     nano, sec = math.modf(time.time())
 
@@ -35,7 +35,6 @@ def build_ack(seq, perror):
 
     return add_checksum(bseq + bsec + bnano + md5)
 
-
 def add_checksum(partial):
 
     m = hashlib.md5()
@@ -49,47 +48,81 @@ def add_checksum(partial):
     return partial + bchecksum
 
 # Geracao de erro na mensagem
-
-
 def is_error():
+    
     global PERROR
+    
     rand = random.uniform(0, 1)
 
-    return (rand < PERROR)
+    return rand < PERROR
 
 # Thread do usuario
-
-
 def user_thread(udp, outputFile):
 
-    global WTX, PERROR
-    print('user')
+    global RWS
+
+    janela = [None] * RWS
+    lfa = RWS   # Maior quadro aceitavel
+    nfe = 0     # Proximo quadro esperado  
+    index = 0
 
     while True:
+        global lock
+        
         # Tamanho maximo do pacote = 8 + 8 + 4 + 2 + 2^14 + 16
         data, address = udp.recvfrom(16422)
 
         print('Origem: {}'.format(address))
-
         # Verificacao do md5
         if(check_md5(data)):
-            # Enviar ACK
-            print('Envia ACK')
+            
             seqnumber = 0
             seqnumber = seqnumber.from_bytes(
                 data[:8], byteorder='big', signed=False)
+            
+            messageSize = 0
+            messageSize = messageSize.from_bytes(data[20:22], byteorder='big', signed=False)
+            
+            message = (data[22:(22 + messageSize)]).decode('ascii')
+            print(message)
 
-            ack = build_ack(seqnumber, PERROR)
+            # TODO: Implementar a janela circular
+            # TODO: e arrumar os indices
+            
+            # Quadro eh o proximo esperado
+            if seqnumber == nfe:
+                # Salva mensagem na janela
 
-            udp.sendto(ack, address)
+                janela[nfe] = message
+                # Enviar ACK
+                ack = build_ack(seqnumber)
+                udp.sendto(ack, address)
+
+                lock.acquire()
+                # Salvar janela ate proximo None
+                with open(outputFile, 'a') as file:
+                    while janela[index] != None:
+                        file.write(message)
+                        file.write('\n')
+                        index += 1               
+                lock.release()
+                nfe = index    
+            
+            # Quadro esta dentro da janela esperada
+            elif seqnumber > nfe or seqnumber < lfa:
+                janela[seqnumber] = message
+                # Enviar ACK
+                ack = build_ack(seqnumber)
+                udp.sendto(ack, address)
+
 
 
 # Retorna True se md5 estiver correto
 def check_md5(data):
 
-    bSeqNumber = data[0:8]
-    bSeconds = data[8:16]
-    bNanoSec = data[16:20]
+    bSeqNumber   = data[0:8]
+    bSeconds     = data[8:16]
+    bNanoSec     = data[16:20]
     bMessageSize = data[20:22]
 
     messageSize = 0
@@ -105,18 +138,17 @@ def check_md5(data):
 
     return md5Recebido == md5Calculado.hexdigest()
 
-
 def main():
-    global WTX, PERROR
+    global RWS, PERROR
 
     if (len(sys.argv) < 4):
         print("ERROR: Argumentos invalidos.")
-        print("Tente: fileName port Wtx Perror")
+        print("Tente: fileName port RWS Perror")
         sys.exit()
 
-    FILE = sys.argv[1]
-    PORT = int(sys.argv[2])
-    WTX = int(sys.argv[3])
+    FILE   = sys.argv[1]
+    PORT   = int(sys.argv[2])
+    RWS    = int(sys.argv[3])
     PERROR = float(sys.argv[4])
 
     server_address = ('localhost', PORT)
@@ -125,13 +157,12 @@ def main():
     udp.bind(server_address)
 
     try:
-        user = Thread(target=user_thread, args=(udp, FILE,))
+        user = threading.Thread(target=user_thread, args=(udp, FILE,))
         user.start()
 
     except (KeyboardInterrupt, SystemExit):
         user.join()
         exit()
-
 
 if __name__ == '__main__':
     main()
