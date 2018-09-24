@@ -8,8 +8,11 @@ import math
 import hashlib
 import random
 import threading
+from heapq import heappush, heappop, nsmallest
 
 base9 = 1000000000
+
+clients = {}
 
 lock = threading.Lock()
 
@@ -28,7 +31,7 @@ def build_ack(seq):
     m.update(ack)
 
     if is_error():
-        print('Erro no MD5')
+        # print('Erro no MD5')
         md5 = (random.getrandbits(128)).to_bytes(16, byteorder='big')
     else:
         md5 = bytes.fromhex(m.hexdigest())
@@ -56,25 +59,33 @@ def is_error():
 
     return rand < PERROR
 
+def new_client(address):
+    global RWS
+    clients[address] = {}
+    clients[address]['janela'] = {}
+    clients[address]['lfa'] = RWS - 1
+    clients[address]['nfe'] = 0
+    for v in range(RWS):
+        clients[address]['janela'][v] = None
+
+
 # Thread do usuario
 def user_thread(udp, outputFile):
 
-    global RWS
-
-    janela = [None] * RWS
-    lfa = RWS   # Maior quadro aceitavel
-    nfe = 0     # Proximo quadro esperado  
-    index = 0
+    global RWS, lock
 
     while True:
-        global lock
-        
         # Tamanho maximo do pacote = 8 + 8 + 4 + 2 + 2^14 + 16
-        data, address = udp.recvfrom(16422)
+        data, addr = udp.recvfrom(16422)
+
+        lock.acquire()
+        if addr not in clients: new_client(addr)
+        lock.release()
+        # print(clients[addr]['janela'].keys())
 
         # Verificacao do md5
         if(check_md5(data)):
-            
+            lock.acquire()
             seqnumber = 0
             seqnumber = seqnumber.from_bytes(
                 data[:8], byteorder='big', signed=False)
@@ -83,37 +94,35 @@ def user_thread(udp, outputFile):
             messageSize = messageSize.from_bytes(data[20:22], byteorder='big', signed=False)
             
             message = (data[22:(22 + messageSize)]).decode('ascii')
-            print(message)
-
-            # TODO: Implementar a janela circular
-            # TODO: e arrumar os indices
+            # print(message)
             
-            # Quadro eh o proximo esperado
-            if seqnumber == nfe:
-                # Salva mensagem na janela
-
-                janela[nfe] = message
-                # Enviar ACK
+            if seqnumber == clients[addr]['nfe']:
+                clients[addr]['janela'][seqnumber] = message
                 ack = build_ack(seqnumber)
-                udp.sendto(ack, address)
+                udp.sendto(ack, addr)
 
-                lock.acquire()
                 # Salvar janela ate proximo None
                 with open(outputFile, 'a') as file:
-                    while janela[index] != None:
-                        file.write(message)
+                    while clients[addr]['janela'][seqnumber] != None:
+                        file.write(clients[addr]['janela'][seqnumber])
                         file.write('\n')
-                        index += 1               
-                lock.release()
-                nfe = index    
-            
-            # Quadro esta dentro da janela esperada
-            elif seqnumber > nfe or seqnumber < lfa:
-                janela[seqnumber] = message
-                # Enviar ACK
+                        del clients[addr]['janela'][seqnumber]
+                        seqnumber += 1               
+                clients[addr]['nfe'] = seqnumber
+                clients[addr]['lfa'] = seqnumber + RWS - 1
+                for v in range(seqnumber, clients[addr]['lfa']):
+                    if v not in clients[addr]['janela'] and v > seqnumber: 
+                        clients[addr]['janela'][v] = None
+            elif seqnumber > clients[addr]['nfe'] and seqnumber < clients[addr]['lfa']:
+                # Quadro esta dentro da janela esperada
+                clients[addr]['janela'][seqnumber] = message
                 ack = build_ack(seqnumber)
-                udp.sendto(ack, address)
-
+                udp.sendto(ack, addr)
+            elif seqnumber < clients[addr]['nfe']:
+                # Caso receba abaixo da janela deve reenviar ack
+                ack = build_ack(seqnumber)
+                udp.sendto(ack, addr)
+            lock.release()
 
 
 # Retorna True se md5 estiver correto
