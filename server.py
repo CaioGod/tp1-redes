@@ -102,6 +102,9 @@ def user_thread(udp, outputFile):
 
                 # Salvar janela ate proximo None
                 with open(outputFile, 'a') as file:
+                    # print(clients[addr])
+                    # print(clients[addr]['janela'])
+                    # print(clients[addr]['janela'][seqnumber])
                     while clients[addr]['janela'][seqnumber] != None:
                         file.write(clients[addr]['janela'][seqnumber])
                         file.write('\n')

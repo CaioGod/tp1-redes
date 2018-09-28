@@ -75,6 +75,7 @@ def send_thread(udp, server_address, contentList):
             break
 
         for key, value in sliding_window.items():
+            if key >= len(contentList): break
             if value == -1: continue
             if value == 0 or value < time.time():
                 sliding_window[key] = time.time() + TOUT
@@ -106,7 +107,6 @@ def ack_thread(udp, contentSize):
             continue
     
         if not check_md5(ack_pkg):
-            # print("MD5 dont match")
             continue
         ack_index = get_index(ack_pkg)
         
