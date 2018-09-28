@@ -59,7 +59,7 @@ def is_error():
 
 def new_client(address):
     
-    global RWS
+    global RWS, clients
     
     clients[address] = {}
     clients[address]['janela'] = {}
@@ -72,7 +72,7 @@ def new_client(address):
 # Thread do usuario
 def user_thread(udp, outputFile):
 
-    global RWS, lock
+    global RWS, lock, clients
 
     while True:
         # Tamanho maximo do pacote = 8 + 8 + 4 + 2 + 2^14 + 16
