@@ -105,16 +105,9 @@ def user_thread(udp, outputFile):
                     #print('CLIENTE: {}'.format(clients[addr]))
                     #print('JANELA: {}'.format(clients[addr]['janela']))
                     #print('PACOTE: {}'.format(clients[addr]['janela'][seqnumber]))
-                    
+
                     # Verifica o tamanho da janela para evitar iterar em janelas pequenas. 
-                    if RWS == 1:
-                        file.write(clients[addr]['janela'][seqnumber])
-                        file.write('\n')
-                        del clients[addr]['janela'][seqnumber]
-                        seqnumber += 1
-                    
-                    elif RWS == 2:
-                        
+                    if RWS == 1 or RWS == 2:
                         if clients[addr]['janela'][seqnumber] != None:
                             file.write(clients[addr]['janela'][seqnumber])
                             file.write('\n')
